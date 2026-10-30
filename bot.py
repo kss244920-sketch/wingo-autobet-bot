@@ -388,6 +388,10 @@ class HealthHandler(BaseHTTPRequestHandler):
                 "wins": engine.wins,
                 "losses": engine.losses,
                 "skips": engine.skips,
+                "active_issue": engine.last_handled_issue,
+                "last_action": engine.last_action_desc,
+                "last_settled": engine.last_settled_desc,
+                "active_bet": engine.active_bet,
                 "mode": "DEMO" if engine.is_demo else "REAL"
             }
             self.wfile.write(json.dumps(data).encode("utf-8"))

@@ -156,7 +156,7 @@ class AutoBetEngine:
                     continue
 
                 latest_settled = history[-1] if history else {}
-                latest_issue = str(latest_settled.get("issueNumber", ""))
+                latest_issue = str(latest_settled.get("issueNumber") or latest_settled.get("period", ""))
                 
                 try:
                     cur_issue = str(int(latest_issue) + 1)
