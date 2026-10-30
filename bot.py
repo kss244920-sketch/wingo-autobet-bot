@@ -52,7 +52,7 @@ def format_status_text(data: Dict[str, Any]) -> str:
     engine_state = "🟢 <b>RUNNING (Auto-Trading)</b>" if is_running else "🔴 <b>STOPPED</b>"
 
     text = (
-        f"📌 <b>LIVE WINGO AUTOBET DASHBOARD</b>\n"
+        f"📌 <b>LIVE WINGO 1-MIN AUTOBET DASHBOARD</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💼 <b>Mode:</b> {mode_label}\n"
         f"⚡ <b>Engine:</b> {engine_state}\n"
