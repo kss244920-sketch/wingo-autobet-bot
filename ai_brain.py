@@ -12,7 +12,13 @@ class WinGoAIBrain:
         os.environ["CACHE_FILE"] = os.path.join(base_dir, "history_cache.json")
         os.environ["STATE_FILE"] = os.path.join(base_dir, "state_cache.json")
 
-        spec = importlib.util.spec_from_file_location("wingo_orig", "/home/piyush/wingo_bot/bot.py")
+        local_orig = os.path.join(base_dir, "wingo_orig.py")
+        if os.path.exists(local_orig):
+            orig_path = local_orig
+        else:
+            orig_path = "/home/piyush/wingo_bot/bot.py"
+
+        spec = importlib.util.spec_from_file_location("wingo_orig", orig_path)
         self.wb = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.wb)
         self.wb.load_cache()
