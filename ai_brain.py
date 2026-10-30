@@ -117,9 +117,13 @@ class WinGoAIBrain:
         """
         # 1. Primary Path: 1:1 Synchronize with user's live 30-Second Predictor bot
         if target_issue:
-            live_signal = self.fetch_live_predictor_signal(target_issue)
-            if live_signal:
-                return live_signal
+            import time
+            for attempt in range(4):
+                live_signal = self.fetch_live_predictor_signal(target_issue)
+                if live_signal and live_signal.get("decision") not in ("WAITING", "NONE", ""):
+                    return live_signal
+                if attempt < 3:
+                    time.sleep(1.0)
 
         # 2. Fallback Path: Sync live history items into MEMORY_HISTORY
         for it in history_items:
