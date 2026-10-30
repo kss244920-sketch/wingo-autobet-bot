@@ -237,16 +237,36 @@ def send_trade_history_report(chat_id: int, records: list, start_bal: float, cur
     losses = sum(1 for r in records if not r.get("is_win"))
     tot = len(records)
     wr = f"{(wins / tot * 100):.1f}%" if tot > 0 else "0%"
-    profit = round(cur_bal - start_bal, 2)
+
+    # Compute settled portfolio balance directly from completed trades
+    settled_bal = records[-1].get("balance", cur_bal) if records else cur_bal
+    settled_profit = round(settled_bal - start_bal, 2)
+
+    # Check if an active round is currently holding bet margin
+    active_bet = getattr(engine, "active_bet", None)
+    active_stake = active_bet.get("stake", 0) if (active_bet and isinstance(active_bet, dict)) else 0
+    active_iss = str(active_bet.get("issue", ""))[-4:] if (active_bet and isinstance(active_bet, dict)) else ""
+
+    if active_stake > 0:
+        bal_section = (
+            f"💎 <b>Settled Balance:</b> <b>₹{settled_bal:,.2f}</b> (Target: ₹{target:,.2f})\n"
+            f"📈 <b>Net Settled Profit:</b> <b>{'+' if settled_profit >= 0 else ''}₹{settled_profit:.2f}</b>\n"
+            f"⏳ <b>In-Play Active Bet:</b> <b>₹{active_stake:.2f}</b> (Round <code>...{active_iss}</code>)\n"
+            f"💵 <b>Available Free Cash:</b> <b>₹{cur_bal:,.2f}</b>\n"
+        )
+    else:
+        bal_section = (
+            f"💎 <b>Current Balance:</b> <b>₹{cur_bal:,.2f}</b> (Target: ₹{target:,.2f})\n"
+            f"📈 <b>Net Profit Generated:</b> <b>{'+' if settled_profit >= 0 else ''}₹{settled_profit:.2f}</b>\n"
+        )
 
     header = (
         f"📊 <b>COMPLETE TRADE AUDIT HISTORY</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 <b>Initial Bankroll:</b> ₹{start_bal:,.2f}\n"
-        f"💎 <b>Current Balance:</b> <b>₹{cur_bal:,.2f}</b> (Target: ₹{target:,.2f})\n"
-        f"📈 <b>Net Profit Generated:</b> <b>{'+' if profit >= 0 else ''}₹{profit:.2f}</b>\n"
+        f"{bal_section}"
         f"🏆 <b>Scoreboard:</b> {wins}W / {losses}L ({wr} Win Rate)\n"
-        f"⏱️ <b>Total Trades:</b> {tot} Rounds Executed\n"
+        f"⏱️ <b>Total Trades:</b> {tot} Rounds Settled\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     )
 
