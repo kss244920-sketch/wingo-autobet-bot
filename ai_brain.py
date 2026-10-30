@@ -26,13 +26,49 @@ class WinGoAIBrain:
         self.wb.GROQ_API_KEY = self.groq_api_key or os.environ.get("GROQ_API_KEY", "")
         self.wb.load_cache()
         self._normalize_memory()
+        self.latest_channel_signal: Optional[Dict[str, Any]] = None
         print(f"🧠 [AI BRAIN INITIALIZED] Original 16-Agent Council Loaded with {len(self.wb.MEMORY_HISTORY)} cached rounds.", flush=True)
+
+    def set_channel_signal(self, sig: Dict[str, Any]):
+        """Saves real-time prediction signal captured directly from Telegram Channel -1003799001380."""
+        self.latest_channel_signal = sig
 
     def fetch_live_predictor_signal(self, target_issue: str) -> Optional[Dict[str, Any]]:
         """
-        Directly synchronizes with the user's live 30-Second Elite Predictor bot on Render.
+        Directly synchronizes with the user's live 30-Second Elite Predictor bot on Telegram Channel & Render API.
         Guarantees 100% 1:1 alignment between user's channel signals and autobet placement.
         """
+        import time
+
+        # 1. First Priority: Check instant push from Telegram Channel -1003799001380
+        if self.latest_channel_signal:
+            sig_p = str(self.latest_channel_signal.get("period", ""))
+            # Check period match (full or last 3-4 digits)
+            if sig_p and (sig_p == target_issue or target_issue.endswith(sig_p) or sig_p.endswith(target_issue[-4:])):
+                # Verify freshness (< 45s old)
+                if time.time() - self.latest_channel_signal.get("time", 0) < 45.0:
+                    val = self.latest_channel_signal.get("decision", "SKIP")
+                    conf = float(self.latest_channel_signal.get("confidence", 90.0 if val in ("BIG", "SMALL") else 50.0))
+                    strat = self.latest_channel_signal.get("strategy", "Channel VIP Signal")
+                    is_qual = (val in ("BIG", "SMALL"))
+                    if is_qual:
+                        self.consecutive_skips = 0
+                    else:
+                        self.consecutive_skips += 1
+
+                    print(f"⚡ [CHANNEL SIGNAL 1:1] Target: {target_issue} -> {val} ({conf:.0f}%) | {strat}", flush=True)
+                    return {
+                        "decision": val,
+                        "confidence": conf,
+                        "strategy": strat,
+                        "reason": f"Channel VIP Signal ({strat})",
+                        "is_qualified": is_qual,
+                        "expected_nums": self.latest_channel_signal.get("expected_num"),
+                        "grade": "LEVEL_1",
+                        "source": "TELEGRAM_CHANNEL_VIP"
+                    }
+
+        # 2. Second Priority: Poll Render Predictor API (/api/panel-data)
         predictor_url = os.environ.get("PREDICTOR_API_URL", "https://wingo-bot-s92f.onrender.com/api/panel-data")
         try:
             req = urllib.request.Request(predictor_url, headers={"User-Agent": "WinGoAutoBetEngine/2.0"})

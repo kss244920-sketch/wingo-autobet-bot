@@ -73,10 +73,10 @@ def get_dashboard_markup():
     markup = types.InlineKeyboardMarkup(row_width=2)
     b1 = types.InlineKeyboardButton("🚀 Start Auto-Bet", callback_data="cb_start")
     b2 = types.InlineKeyboardButton("🛑 Stop Auto-Bet", callback_data="cb_stop")
-    b3 = types.InlineKeyboardButton("🎯 Set Target Amount", callback_data="cb_target")
-    b4 = types.InlineKeyboardButton("💼 Refresh Balance", callback_data="cb_balance")
-    b5 = types.InlineKeyboardButton("📊 Live Status", callback_data="cb_status")
-    b6 = types.InlineKeyboardButton("🔄 Reset Stats", callback_data="cb_reset")
+    b3 = types.InlineKeyboardButton("🎯 Set Target Goal", callback_data="cb_target")
+    b4 = types.InlineKeyboardButton("📜 Trade Audit History", callback_data="cb_history")
+    b5 = types.InlineKeyboardButton("🔄 Reset Demo Stats", callback_data="cb_reset")
+    b6 = types.InlineKeyboardButton("💼 Refresh Balance", callback_data="cb_balance")
     markup.add(b1, b2)
     markup.add(b3, b4)
     markup.add(b5, b6)
@@ -165,21 +165,147 @@ def on_engine_status_update(data: Dict[str, Any]):
                 print(f"[PINNED EDIT ERROR] {e}")
 
 
+VIP_CHANNEL_ID = -1003799001380
+
+def parse_channel_signal(raw_text: str) -> Optional[Dict[str, Any]]:
+    if not raw_text:
+        return None
+    clean = re.sub(r"<[^>]+>", " ", raw_text)
+
+    period = None
+    pm = re.search(r"Period\s*[:\s]*\.{0,3}(\d+)", clean, re.I)
+    if pm:
+        period = pm.group(1)
+
+    if "SKIP" in clean.upper():
+        return {
+            "period": period,
+            "decision": "SKIP",
+            "confidence": 50.0,
+            "strategy": "Capital Guard (Channel SKIP)",
+            "time": time.time()
+        }
+
+    val = None
+    vm = re.search(r"Bet on\s*➔\s*[^A-Z]*(BIG|SMALL)", clean, re.I)
+    if vm:
+        val = vm.group(1).upper()
+
+    num = None
+    nm = re.search(r"Number Chance\s*➔\s*(\d+)", clean, re.I)
+    if nm:
+        num = int(nm.group(1))
+
+    strat = "30S Predictor VIP Signal"
+    sm = re.search(r"Strategy:\s*([^\n\r]+)", clean, re.I)
+    if sm:
+        strat = sm.group(1).strip()
+
+    if val:
+        return {
+            "period": period,
+            "decision": val,
+            "expected_num": num,
+            "strategy": strat,
+            "confidence": 92.0,
+            "time": time.time()
+        }
+    return None
+
+
+@bot.channel_post_handler(func=lambda msg: True)
+def handle_channel_post(msg):
+    if msg.chat.id != VIP_CHANNEL_ID and str(msg.chat.id) != str(VIP_CHANNEL_ID):
+        return
+
+    text = msg.text or msg.caption or ""
+    parsed = parse_channel_signal(text)
+    if parsed:
+        ai_brain.set_channel_signal(parsed)
+        p = parsed.get("period", "--")
+        d = parsed.get("decision", "SKIP")
+        strat = parsed.get("strategy", "")
+        print(f"📡 [CHANNEL SIGNAL CAPTURED 1:1] Period: {p} | Decision: {d} | Strat: {strat}", flush=True)
+
+
+def send_trade_history_report(chat_id: int, records: list, start_bal: float, cur_bal: float, target: float):
+    if not records:
+        bot.send_message(chat_id, "📜 <b>No settled trades recorded in this session yet.</b>")
+        return
+
+    wins = sum(1 for r in records if r.get("is_win"))
+    losses = sum(1 for r in records if not r.get("is_win"))
+    tot = len(records)
+    wr = f"{(wins / tot * 100):.1f}%" if tot > 0 else "0%"
+    profit = round(cur_bal - start_bal, 2)
+
+    header = (
+        f"📊 <b>COMPLETE TRADE AUDIT HISTORY</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 <b>Initial Bankroll:</b> ₹{start_bal:,.2f}\n"
+        f"💎 <b>Current Balance:</b> <b>₹{cur_bal:,.2f}</b> (Target: ₹{target:,.2f})\n"
+        f"📈 <b>Net Profit Generated:</b> <b>{'+' if profit >= 0 else ''}₹{profit:.2f}</b>\n"
+        f"🏆 <b>Scoreboard:</b> {wins}W / {losses}L ({wr} Win Rate)\n"
+        f"⏱️ <b>Total Trades:</b> {tot} Rounds Executed\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    )
+
+    rows = []
+    for idx, r in enumerate(records, 1):
+        iss = str(r.get("issue", ""))[-4:]
+        choice = r.get("choice", "")
+        stake = r.get("stake", 0)
+        num = r.get("result_num", 0)
+        size = r.get("result_size", "")
+        pnl = r.get("pnl", 0)
+        bal = r.get("balance", 0)
+        badge = "✅ WIN" if r.get("is_win") else "❌ LOSS"
+        pnl_str = f"+₹{pnl:.2f}" if pnl >= 0 else f"-₹{abs(pnl):.2f}"
+        rows.append(
+            f"<b>#{idx}</b> <code>...{iss}</code> | Bet <b>{choice}</b> (₹{stake:.0f}) ➔ Drawn <b>{num} ({size})</b> | {badge} (<b>{pnl_str}</b>) ➔ ₹{bal:.2f}"
+        )
+
+    full_text = header + "\n".join(rows) + "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🛡️ <i>Live Verified Trades</i>"
+
+    if len(full_text) <= 3800:
+        bot.send_message(chat_id, full_text)
+    else:
+        bot.send_message(chat_id, header)
+        chunk = []
+        c_len = 0
+        for r_str in rows:
+            if c_len + len(r_str) > 3500:
+                bot.send_message(chat_id, "\n".join(chunk))
+                chunk = [r_str]
+                c_len = len(r_str)
+            else:
+                chunk.append(r_str)
+                c_len += len(r_str) + 1
+        if chunk:
+            bot.send_message(chat_id, "\n".join(chunk) + "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🛡️ <i>Live Verified Trades</i>")
+
+
 def on_target_achieved_callback(data: Dict[str, Any]):
     if OWNER_CHAT_ID:
         try:
+            records = data.get("history_records", engine.history_records)
+            start_bal = data.get("start_balance", engine.start_balance)
+            cur_bal = data.get("current_balance", engine.current_balance)
+            target = data.get("target", engine.target_amount)
+            profit = round(cur_bal - start_bal, 2)
+
             celebration = (
-                f"🏆 <b>GOAL COMPLETED! ALL BETS AUTOMATICALLY STOPPED.</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💰 Starting: ₹{data.get('start_balance', 0):.2f}\n"
-                f"🎯 Target: ₹{data.get('target', 0):.2f}\n"
-                f"💎 Final Balance: ₹{data.get('current_balance', 0):.2f}\n"
-                f"📈 Total Profit: +₹{data.get('profit', 0):.2f}\n\n"
-                f"<i>Profits have been successfully locked!</i>"
+                f"🎉 <b>TARGET GOAL ACHIEVED: ₹{target:,.2f}!</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💰 <b>Starting Balance:</b> ₹{start_bal:,.2f}\n"
+                f"💎 <b>Final Balance:</b> <b>₹{cur_bal:,.2f}</b>\n"
+                f"📈 <b>Total Net Profit:</b> <b>+₹{profit:,.2f}</b>\n\n"
+                f"🛡️ <i>All auto-bets have been safely STOPPED to lock in 100% of profits!</i>"
             )
             bot.send_message(OWNER_CHAT_ID, celebration)
-        except Exception:
-            pass
+            send_trade_history_report(OWNER_CHAT_ID, records, start_bal, cur_bal, target)
+        except Exception as e:
+            print(f"[TARGET ACHIEVED ERROR] {e}")
 
 
 @bot.message_handler(commands=["start", "status"])
@@ -252,6 +378,25 @@ def cmd_stop_betting(msg):
         return
 
     engine.stop()
+    ensure_pinned_status(msg.chat.id)
+
+
+@bot.message_handler(commands=["history", "report", "audit"])
+def cmd_report(msg):
+    send_trade_history_report(msg.chat.id, engine.history_records, engine.start_balance, engine.current_balance, engine.target_amount)
+
+
+@bot.message_handler(commands=["reset", "resetdemo"])
+def cmd_reset(msg):
+    engine.current_balance = float(engine.config.get("demo_balance", 100.0))
+    engine.start_balance = engine.current_balance
+    engine.wins = 0
+    engine.losses = 0
+    engine.skips = 0
+    engine.current_loss_streak = 0
+    engine.history_records.clear()
+    engine.last_action_desc = "🔄 Demo stats reset to ₹100.00 baseline."
+    bot.reply_to(msg, "🔄 <b>Demo balance & scoreboard reset to ₹100.00 baseline!</b>")
     ensure_pinned_status(msg.chat.id)
 
 
@@ -328,19 +473,8 @@ def handle_callbacks(call):
         ensure_pinned_status(chat_id)
 
     elif data == "cb_history":
-        if engine.history_records:
-            lines = []
-            for r in engine.history_records[-5:]:
-                badge = "✅" if r.get("is_win") else "❌"
-                pnl = r.get("pnl", 0)
-                p_str = f"+₹{pnl:.2f}" if pnl >= 0 else f"-₹{abs(pnl):.2f}"
-                iss = str(r.get("issue", ""))[-4:]
-                lines.append(f"{badge} {iss}: {r.get('choice')} ➔ {r.get('result_size')} ({p_str})")
-            hist_text = "📜 Recent Rounds:\n" + "\n".join(lines)
-        else:
-            hist_text = "📜 No settled rounds in this session yet."
-        bot.answer_callback_query(call.id, text=hist_text, show_alert=True)
-        ensure_pinned_status(chat_id)
+        bot.answer_callback_query(call.id, text="📜 Loading complete trade audit...")
+        send_trade_history_report(chat_id, engine.history_records, engine.start_balance, engine.current_balance, engine.target_amount)
 
     else:
         bot.answer_callback_query(call.id)
@@ -442,7 +576,11 @@ def main():
             on_status_update=on_engine_status_update
         )
 
-    bot.infinity_polling(timeout=20, long_polling_timeout=10)
+    bot.infinity_polling(
+        timeout=20,
+        long_polling_timeout=10,
+        allowed_updates=["message", "edited_message", "channel_post", "edited_channel_post", "callback_query"]
+    )
 
 
 if __name__ == "__main__":

@@ -51,42 +51,38 @@ class AutoBetEngine:
     def calculate_stake(self, confidence: float = 80.0, strategy: str = "") -> int:
         bal = self.current_balance if self.current_balance > 0 else 100.0
 
-        # Autonomous AI Dynamic Sizing:
-        # High Conviction (88%+ or confirmed Roadmap/Dragon): 12% - 15% of bankroll for rapid compounding
-        # Strong Conviction (80% - 87%): 8% - 10% of bankroll
-        # Standard Conviction (70% - 79%): 5% - 6% of bankroll
+        # Smart Micro-Compounding (8% - 15% bankroll to compound to ₹500 target):
         strat_upper = strategy.upper()
-        if confidence >= 88.0 or "ROADMAP" in strat_upper or "DRAGON" in strat_upper:
-            pct = 0.12
-        elif confidence >= 80.0:
-            pct = 0.08
+        if confidence >= 90.0 or "CONCURRENCE" in strat_upper or "VIP" in strat_upper or "ROADMAP" in strat_upper:
+            pct = 0.12  # 12% stake on high conviction signals
+        elif confidence >= 85.0:
+            pct = 0.10  # 10% stake
         else:
-            pct = 0.05
+            pct = 0.08  # 8% base stake
 
-        base_calc = max(int(self.config.get("min_stake", 3)), int(round(bal * pct)))
+        base_calc = max(int(self.config.get("min_stake", 5)), int(round(bal * pct)))
 
-        # Anti-Martingale & Capital Protection:
-        # After a loss, DO NOT double down into chaos!
+        # Gentle Recovery & Capital Protection:
         if self.current_loss_streak == 1:
-            # Gentle 1.3X only if confidence is very high, else base stake
-            mult = 1.3 if confidence >= 90.0 else 1.0
-            stake = max(base_calc, int(round(base_calc * mult)))
+            # Gentle 1.3X recovery after 1 loss
+            stake = max(base_calc, int(round(base_calc * 1.3)))
         elif self.current_loss_streak >= 2:
-            # Capital Defense: Shrink stake to minimum base to weather drawdowns
-            stake = max(int(self.config.get("min_stake", 3)), int(round(bal * 0.04)))
+            # Capital Defense: Shrink stake to defensive 5% base to weather drawdowns safely
+            stake = max(int(self.config.get("min_stake", 5)), int(round(bal * 0.05)))
         else:
             stake = base_calc
 
-        # Safety cap: Never risk more than 28% of bankroll in any single round
-        max_allowed = max(5, int(round(bal * 0.28)))
+        # Safety cap: Never risk more than 22% of bankroll in any single round
+        max_allowed = max(5, int(round(bal * 0.22)))
         stake = min(stake, max_allowed)
 
-        # Target Clamping: If close to target, only bet what is needed to hit the goal!
+        # Target Clamping: If close to target (e.g. at ₹480 towards ₹500), only bet what is needed!
         if self.target_amount > bal:
             needed = int(math.ceil((self.target_amount - bal) / 0.96))
-            stake = min(stake, max(3, needed))
+            if needed < stake:
+                stake = max(int(self.config.get("min_stake", 5)), needed)
 
-        return max(1, stake)
+        return max(2, stake)
 
     def start(self, on_notification: Optional[Callable[[str], None]] = None,
               on_target_achieved: Optional[Callable[[Dict[str, Any]], None]] = None,
@@ -195,7 +191,8 @@ class AutoBetEngine:
                                 "start_balance": self.start_balance,
                                 "current_balance": self.current_balance,
                                 "target": self.target_amount,
-                                "profit": profit
+                                "profit": profit,
+                                "history_records": list(self.history_records)
                             })
                         self.is_running = False
                         break
@@ -226,6 +223,9 @@ class AutoBetEngine:
                     # 5. Action Execution (SINGLE MESSAGE UPDATE ONLY)
                     if is_qualified and decision in ("BIG", "SMALL"):
                         stake = self.calculate_stake(confidence=confidence, strategy=strategy)
+                        total_bal = (self.current_balance if not self.is_demo else self.current_balance)
+                        stake_pct = int(round((stake / total_bal) * 100)) if total_bal > 0 else 10
+                        exp_badge = f" [🎰 Number: <b>{expected_nums}</b>]" if expected_nums is not None else ""
                         
                         if self.is_demo:
                             self.current_balance = round(self.current_balance - stake, 2)
@@ -235,12 +235,15 @@ class AutoBetEngine:
                                 "stake": stake,
                                 "confidence": confidence,
                                 "strategy": strategy,
+                                "expected_num": expected_nums,
                                 "time": time.time(),
                                 "method": "DEMO SIMULATION"
                             }
                             self.total_bets_placed += 1
-                            exp_badge = f" [🎯 Potential: {expected_nums}]" if expected_nums else ""
-                            self.last_action_desc = f"🎯 <b>Prediction:</b> <b>{decision}</b>{exp_badge} (₹{stake:.2f}) | <i>{strategy}</i> [{confidence:.0f}%]"
+                            self.last_action_desc = (
+                                f"🎯 <b>Target Bet:</b> <b>{decision}</b> (<b>₹{stake:.2f}</b> · {stake_pct}% Bankroll){exp_badge}\n"
+                                f"🔮 <b>Strategy:</b> <i>{strategy}</i> [{confidence:.0f}% Conf]"
+                            )
                             self._update_status(cur_issue)
                         else:
                             bet_res = self.api.place_bet(cur_issue, decision, amount=stake, type_id=game_type_id)
@@ -251,19 +254,22 @@ class AutoBetEngine:
                                     "stake": stake,
                                     "confidence": confidence,
                                     "strategy": strategy,
+                                    "expected_num": expected_nums,
                                     "time": time.time(),
                                     "method": bet_res.get("method", "API")
                                 }
                                 self.total_bets_placed += 1
-                                exp_badge = f" [🎯 Potential: {expected_nums}]" if expected_nums else ""
-                                self.last_action_desc = f"🎯 <b>Live Bet:</b> <b>{decision}</b>{exp_badge} (₹{stake:.2f}) | <i>{strategy}</i> [{confidence:.0f}%]"
+                                self.last_action_desc = (
+                                    f"🎯 <b>Live Bet:</b> <b>{decision}</b> (<b>₹{stake:.2f}</b> · {stake_pct}% Bankroll){exp_badge}\n"
+                                    f"🔮 <b>Strategy:</b> <i>{strategy}</i> [{confidence:.0f}% Conf]"
+                                )
                                 self._update_status(cur_issue)
                             else:
                                 self.last_action_desc = f"⚠️ <b>Bet Error:</b> {bet_res.get('msg')}"
                                 self._update_status(cur_issue)
                     else:
                         self.skips += 1
-                        self.last_action_desc = f"⏭️ <b>Auto Skip:</b> <i>{reason}</i> (No Risk)"
+                        self.last_action_desc = f"⏭️ <b>Auto Skip:</b> <i>{reason}</i> (Capital Shield Active)"
                         self._update_status(cur_issue)
 
                 time.sleep(2.0)
@@ -317,7 +323,8 @@ class AutoBetEngine:
 
                 # Update the last settled description for the pinned dashboard
                 self.last_settled_desc = (
-                    f"{result_badge} <code>{issue_number}</code>: "
-                    f"Bet <b>{bet_choice}</b> | Drawn <b>{win_size} ({win_num})</b> | PnL <b>{'+' if pnl>=0 else ''}₹{pnl:.2f}</b>"
+                    f"{result_badge} <b>Round <code>{issue_number[-4:]}</code>:</b> "
+                    f"Bet <b>{bet_choice}</b> (₹{stake:.0f}) ➔ Drawn <b>{win_size} ({win_num})</b> | "
+                    f"PnL: <b>{'+' if pnl>=0 else ''}₹{pnl:.2f}</b> (Bal: <b>₹{self.current_balance:.2f}</b>)"
                 )
                 break

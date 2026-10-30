@@ -26,9 +26,9 @@ DEFAULT_CONFIG = {
     "min_confidence_to_bet": 80.0,
     "min_quant_margin_pct": 14.0,
     "prefer_skips": True,           # Strictly prefer automatic skips
-    "base_stake_pct": 0.04,         # 4% stake (₹4 on ₹100) for demo progression
-    "min_stake": 2,
-    "max_stake_cap": 25,
+    "base_stake_pct": 0.10,         # 10% dynamic stake for swift target compounding
+    "min_stake": 5,
+    "max_stake_cap": 85,
     "max_loss_streak_halt": 3,
 }
 
