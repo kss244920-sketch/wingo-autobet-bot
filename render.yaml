@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: wingo-autobet-bot
+    runtime: python
+    plan: free
+    region: singapore
+    branch: master
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 -u bot.py
+    healthCheckPath: /
+    autoDeploy: true
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: TELEGRAM_BOT_TOKEN
+        value: 8751111148:AAH9k6fOYw5LW9pIzN3-8jCddcR96s0_-bU
+      - key: GROQ_API_KEY
+        sync: false
