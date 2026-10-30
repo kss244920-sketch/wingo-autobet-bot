@@ -76,7 +76,7 @@ def get_dashboard_markup():
     b3 = types.InlineKeyboardButton("🎯 Set Target Amount", callback_data="cb_target")
     b4 = types.InlineKeyboardButton("💼 Refresh Balance", callback_data="cb_balance")
     b5 = types.InlineKeyboardButton("📊 Live Status", callback_data="cb_status")
-    b6 = types.InlineKeyboardButton("📜 Recent History", callback_data="cb_history")
+    b6 = types.InlineKeyboardButton("🔄 Reset Stats", callback_data="cb_reset")
     markup.add(b1, b2)
     markup.add(b3, b4)
     markup.add(b5, b6)
@@ -313,6 +313,18 @@ def handle_callbacks(call):
             f"⚡ Active Round: {engine.last_handled_issue or 'None'}"
         )
         bot.answer_callback_query(call.id, text=status_text, show_alert=True)
+        ensure_pinned_status(chat_id)
+
+    elif data == "cb_reset":
+        engine.current_balance = float(engine.config.get("demo_balance", 100.0))
+        engine.start_balance = engine.current_balance
+        engine.wins = 0
+        engine.losses = 0
+        engine.skips = 0
+        engine.current_loss_streak = 0
+        engine.history_records.clear()
+        engine.last_action_desc = "🔄 Demo stats reset to ₹100.00 baseline."
+        bot.answer_callback_query(call.id, text="🔄 Demo balance reset to ₹100.00!", show_alert=True)
         ensure_pinned_status(chat_id)
 
     elif data == "cb_history":
