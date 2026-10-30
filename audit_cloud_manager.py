@@ -74,32 +74,27 @@ def dispatch_and_pin_backup(trigger_reason: str = "3-Hour Scheduled Restart Chec
         f"📌 <i>Silently pinned as disaster recovery checkpoint. Auto-restores on restart.</i>"
     )
 
-    targets = [get_target_channel(), DEFAULT_AUDIT_CHANNEL, STORAGE_CHANNEL_ID, FALLBACK_OWNER_ID]
-    for ch in targets:
-        try:
-            files = {'document': (zip_filename, zip_bytes, 'application/zip')}
-            data = {'chat_id': ch, 'caption': caption, 'parse_mode': 'HTML'}
-            r = requests.post(f"https://api.telegram.org/bot{token}/sendDocument", data=data, files=files, timeout=25).json()
-            if not r.get("ok"):
-                continue
+    # 1. Strictly deliver backup only to Owner DM (@OwAtom / 8327850869)
+    # NEVER leak or pin backup zip archives into public or prediction channels!
+    try:
+        files = {'document': (zip_filename, zip_bytes, 'application/zip')}
+        data = {'chat_id': FALLBACK_OWNER_ID, 'caption': caption, 'parse_mode': 'HTML'}
+        r = requests.post(f"https://api.telegram.org/bot{token}/sendDocument", data=data, files=files, timeout=25).json()
+        if r.get("ok"):
             msg_id = r["result"]["message_id"]
-            requests.post(
-                f"https://api.telegram.org/bot{token}/pinChatMessage",
-                json={"chat_id": ch, "message_id": msg_id, "disable_notification": True},
-                timeout=10
-            )
-            logger.info(f"Successfully uploaded & pinned backup #{msg_id} to chat {ch} ✅")
-            return {"success": True, "chat_id": ch, "message_id": msg_id}
-        except Exception as e:
-            logger.warning(f"Upload to {ch} failed: {e}")
-    return {"success": False, "error": "Failed all targets"}
+            logger.info(f"Successfully delivered backup #{msg_id} to Owner DM ({FALLBACK_OWNER_ID}) ✅")
+            return {"success": True, "chat_id": FALLBACK_OWNER_ID, "message_id": msg_id}
+    except Exception as e:
+        logger.warning(f"Failed delivering backup to Owner DM: {e}")
+
+    return {"success": False, "error": "Failed delivering to Owner DM"}
 
 def auto_restore_latest() -> bool:
     token = get_bot_token()
     if not token:
         return False
     
-    targets = [get_target_channel(), DEFAULT_AUDIT_CHANNEL, STORAGE_CHANNEL_ID]
+    targets = [FALLBACK_OWNER_ID]
     for ch in targets:
         try:
             r = requests.get(f"https://api.telegram.org/bot{token}/getChat", params={"chat_id": ch}, timeout=15).json()
