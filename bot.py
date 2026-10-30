@@ -518,6 +518,20 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
                 return
 
+        if self.path in ("/is_busy", "/busy"):
+            active_bet = getattr(engine, "active_bet", None)
+            is_busy = (active_bet is not None and isinstance(active_bet, dict))
+            res = {
+                "busy": is_busy,
+                "process": f"Active bet in progress for round {active_bet.get('issue')}" if is_busy else "Idle",
+                "active_bet": active_bet
+            }
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode("utf-8"))
+            return
+
         if self.path in ("/", "/health", "/panel"):
             self.send_response(200)
             self.send_header("Content-type", "text/html; charset=utf-8")
@@ -583,7 +597,7 @@ def main():
     # Start Cloud Backup, Silent Pin & Disaster Recovery Daemon
     try:
         from audit_cloud_manager import start_backup_daemon
-        start_backup_daemon(interval_seconds=15 * 60)
+        start_backup_daemon(interval_seconds=3 * 3600)
         print("☁️ [BACKUP DAEMON] Auto Cloud Backup & Pin Daemon active! ✅", flush=True)
     except Exception as e:
         print(f"⚠️ [BACKUP DAEMON] Error: {e}", flush=True)

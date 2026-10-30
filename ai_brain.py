@@ -45,8 +45,8 @@ class WinGoAIBrain:
             sig_p = str(self.latest_channel_signal.get("period", ""))
             # Check period match (full or last 3-4 digits)
             if sig_p and (sig_p == target_issue or target_issue.endswith(sig_p) or sig_p.endswith(target_issue[-4:])):
-                # Verify freshness (< 45s old)
-                if time.time() - self.latest_channel_signal.get("time", 0) < 45.0:
+                # Verify freshness (< 85s old for 1-Minute WinGo rounds)
+                if time.time() - self.latest_channel_signal.get("time", 0) < 85.0:
                     val = self.latest_channel_signal.get("decision", "SKIP")
                     conf = float(self.latest_channel_signal.get("confidence", 90.0 if val in ("BIG", "SMALL") else 50.0))
                     strat = self.latest_channel_signal.get("strategy", "Channel VIP Signal")
@@ -72,7 +72,7 @@ class WinGoAIBrain:
         predictor_url = os.environ.get("PREDICTOR_API_URL", "https://wingo-bot-s92f.onrender.com/api/panel-data")
         try:
             req = urllib.request.Request(predictor_url, headers={"User-Agent": "WinGoAutoBetEngine/2.0"})
-            with urllib.request.urlopen(req, timeout=3.5) as resp:
+            with urllib.request.urlopen(req, timeout=6.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 pred_period = str(data.get("period", ""))
                 # Verify period match (full or last 3-4 digits)
