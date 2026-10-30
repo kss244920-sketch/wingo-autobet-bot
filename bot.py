@@ -196,7 +196,7 @@ def parse_channel_signal(raw_text: str) -> Optional[Dict[str, Any]]:
     if nm:
         num = int(nm.group(1))
 
-    strat = "30S Predictor VIP Signal"
+    strat = "1M Predictor VIP Signal"
     sm = re.search(r"Strategy:\s*([^\n\r]+)", clean, re.I)
     if sm:
         strat = sm.group(1).strip()

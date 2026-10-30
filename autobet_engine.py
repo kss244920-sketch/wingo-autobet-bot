@@ -138,10 +138,10 @@ class AutoBetEngine:
                 print(f"[STATUS UPDATE ERROR] {e}")
 
     def _run_loop(self):
-        print(f"[+] WinGo ({self.config.get('game_code', 'WinGo_30S')}) Engine Running (Single-Message Live Mode).", flush=True)
+        print(f"[+] WinGo ({self.config.get('game_code', 'WinGo_1M')}) Engine Running (Single-Message Live Mode).", flush=True)
 
-        history_url = self.config.get("history_api_url", "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json")
-        game_type_id = int(self.config.get("game_type_id", 30))
+        history_url = self.config.get("history_api_url", "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json")
+        game_type_id = int(self.config.get("game_type_id", 1))
 
         while self.is_running:
             try:
@@ -154,10 +154,26 @@ class AutoBetEngine:
                 latest_settled = history[-1] if history else {}
                 latest_issue = str(latest_settled.get("issueNumber") or latest_settled.get("period", ""))
                 
-                try:
-                    cur_issue = str(int(latest_issue) + 1)
-                except Exception:
-                    cur_issue = latest_issue
+                if len(latest_issue) >= 17:
+                    date_str = latest_issue[:8]
+                    mid_code = latest_issue[8:13]
+                    round_str = latest_issue[13:]
+                    try:
+                        r_num = int(round_str)
+                        max_r = 1440 if mid_code == "10001" else 2880
+                        if r_num >= max_r:
+                            import datetime
+                            dt = datetime.datetime.strptime(date_str, "%Y%m%d") + datetime.timedelta(days=1)
+                            cur_issue = f"{dt.strftime('%Y%m%d')}{mid_code}0001"
+                        else:
+                            cur_issue = f"{date_str}{mid_code}{r_num + 1:04d}"
+                    except Exception:
+                        cur_issue = str(int(latest_issue) + 1)
+                else:
+                    try:
+                        cur_issue = str(int(latest_issue) + 1)
+                    except Exception:
+                        cur_issue = latest_issue
 
                 # Check if this is a new round
                 if cur_issue != self.last_handled_issue:
@@ -211,7 +227,7 @@ class AutoBetEngine:
                         self.is_running = False
                         break
 
-                    # 🧠 4. Run Deep AI Thinking & Quant Analysis (Synchronized with 30S Predictor Stream)
+                    # 🧠 4. Run Deep AI Thinking & Quant Analysis (Synchronized with 1M Predictor Stream)
                     analysis = self.brain.analyze(history, current_loss_streak=self.current_loss_streak, target_issue=cur_issue)
                     decision = analysis.get("decision", "SKIP")
                     confidence = analysis.get("confidence", 50.0)

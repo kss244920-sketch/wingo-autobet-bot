@@ -135,8 +135,8 @@ class WinGoAPIClient:
             print(f"[API ERROR] GetUserAmount: {e}")
         return self.balance
 
-    def get_current_issue(self, type_id: int = 2) -> Dict[str, Any]:
-        """Fetch current issue and timing for game type (2 = WinGo 3M)."""
+    def get_current_issue(self, type_id: int = 1) -> Dict[str, Any]:
+        """Fetch current issue and timing for game type (1 = WinGo 1M)."""
         try:
             body = signed_body({"typeId": type_id})
             r = self.session.post(f"{self.api}/api/webapi/GetGameIssue", json=body, timeout=8)
@@ -147,7 +147,7 @@ class WinGoAPIClient:
             print(f"[API ERROR] GetGameIssue: {e}")
         return {}
 
-    def get_history(self, history_url: str = "https://draw.ar-lottery01.com/WinGo/WinGo_3M/GetHistoryIssuePage.json") -> list:
+    def get_history(self, history_url: str = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json") -> list:
         """Fetch latest draw history from draw engine and maintain persistent rolling cache."""
         import os
         cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history_cache.json")
@@ -155,7 +155,9 @@ class WinGoAPIClient:
         if os.path.exists(cache_path):
             try:
                 with open(cache_path, "r") as f:
-                    cached = json.load(f)
+                    raw_cached = json.load(f)
+                    # Discard old 30S cache (10005) when on 1M
+                    cached = [it for it in raw_cached if "10001" in str(it.get("issueNumber") or it.get("period", ""))]
             except Exception:
                 pass
 
@@ -187,7 +189,7 @@ class WinGoAPIClient:
 
         return cached
 
-    def place_bet_api(self, issue_number: str, choice: str, amount: int = 1, type_id: int = 2) -> Dict[str, Any]:
+    def place_bet_api(self, issue_number: str, choice: str, amount: int = 1, type_id: int = 1) -> Dict[str, Any]:
         """
         Place bet directly through AR-SAAS API.
         choice: BIG (selectType: 13, gameType: 2) | SMALL (selectType: 14, gameType: 2)
@@ -310,7 +312,7 @@ class WinGoAPIClient:
                 except Exception:
                     pass
 
-    def place_bet(self, issue_number: str, choice: str, amount: int = 1, type_id: int = 2) -> Dict[str, Any]:
+    def place_bet(self, issue_number: str, choice: str, amount: int = 1, type_id: int = 1) -> Dict[str, Any]:
         """Primary API attempt with seamless Selenium fallback if maintenance code 405."""
         res = self.place_bet_api(issue_number, choice, amount, type_id)
         if not res["ok"] and res.get("code") == 1 and "maintained" in res.get("msg", "").lower():

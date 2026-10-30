@@ -11,10 +11,10 @@ DEFAULT_CONFIG = {
     "target_site": "https://www.dmfirst17.com",
     "target_api": "https://api.dmfirst9api.com",
     
-    # Mode switch for fast testing: 30 Seconds
-    "game_type_id": 30,             # WinGo 30s
-    "game_code": "WinGo_30S",
-    "history_api_url": "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json",
+    # Mode: WinGo 1 Minute Production Engine
+    "game_type_id": 1,              # WinGo 1M
+    "game_code": "WinGo_1M",
+    "history_api_url": "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json",
     
     # Demo Simulation Settings
     "demo_mode": True,

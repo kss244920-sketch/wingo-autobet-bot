@@ -80,7 +80,7 @@ class WinGoAIBrain:
                     pred_val = str(data.get("prediction", "SKIP")).upper()
                     if pred_val in ("BIG", "SMALL", "SKIP"):
                         conf = float(data.get("confidence", 85.0 if pred_val in ("BIG", "SMALL") else 50.0))
-                        strat = str(data.get("strategy") or data.get("consensus") or "30S Live Predictor Alignment")
+                        strat = str(data.get("strategy") or data.get("consensus") or "1M Live Predictor Alignment")
                         is_qualified = (pred_val in ("BIG", "SMALL"))
                         
                         if is_qualified:
@@ -93,11 +93,11 @@ class WinGoAIBrain:
                             "decision": pred_val,
                             "confidence": conf,
                             "strategy": strat,
-                            "reason": str(data.get("reason", "30S Live Predictor Stream Synchronization")),
+                            "reason": str(data.get("reason", "1M Live Predictor Stream Synchronization")),
                             "is_qualified": is_qualified,
                             "expected_nums": data.get("expected_nums"),
                             "grade": str(data.get("grade", "LEVEL_1")),
-                            "source": "LIVE_30S_PREDICTOR"
+                            "source": "LIVE_1M_PREDICTOR"
                         }
         except Exception as e:
             # Fallback to local quant engine if stream is temporarily slow
@@ -143,7 +143,7 @@ class WinGoAIBrain:
     def analyze(self, history_items: List[Dict[str, Any]], current_loss_streak: int = 0, target_issue: Optional[str] = None) -> Dict[str, Any]:
         """
         Runs the 16-Agent AI & Math Quant Council (from user's original wingo_bot):
-        - Direct synchronization with live 30S Predictor Bot
+        - Direct synchronization with live 1M Predictor Bot
         - Baccarat Derived Roads (Big Road, Big Eye Boy, Small Road, Cockroach Road)
         - Full Cloud DB Pattern Mining Engine across 7,300+ rounds
         - Volatility Delta Chaos Guard
@@ -151,7 +151,7 @@ class WinGoAIBrain:
         - Qwen-27B Neural Arbiter
         - 5-Level Adaptive Martingale & Recovery Target Locking
         """
-        # 1. Primary Path: 1:1 Synchronize with user's live 30-Second Predictor bot
+        # 1. Primary Path: 1:1 Synchronize with user's live 1-Minute Predictor bot
         if target_issue:
             import time
             for attempt in range(4):
