@@ -69,7 +69,7 @@ class WinGoAIBrain:
                     }
 
         # 2. Second Priority: Poll Render Predictor API (/api/panel-data)
-        predictor_url = os.environ.get("PREDICTOR_API_URL", "https://wingo-bot-s92f.onrender.com/api/panel-data")
+        predictor_url = os.environ.get("PREDICTOR_API_URL") or os.environ.get("PREDICTOR_URL") or "https://wingo-bot-s92f.onrender.com/api/panel-data"
         try:
             req = urllib.request.Request(predictor_url, headers={"User-Agent": "WinGoAutoBetEngine/2.0"})
             with urllib.request.urlopen(req, timeout=6.0) as resp:
