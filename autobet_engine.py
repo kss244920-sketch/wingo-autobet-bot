@@ -299,8 +299,17 @@ class AutoBetEngine:
                     pnl = round(stake * 0.96, 2)
                     if self.is_demo:
                         self.current_balance = round(self.current_balance + (stake * 1.96), 2)
-                    result_badge = "✅ <b>WIN</b>"
+                    
+                    import re
+                    exp_nums = self.active_bet.get("expected_num") or self.active_bet.get("expected_nums")
+                    exp_list = re.findall(r"\b\d\b", str(exp_nums or ""))
+                    is_jackpot = (str(win_num) in exp_list)
+                    if is_jackpot:
+                        result_badge = "🎯 <b>WIN (JACKPOT 9X)!</b>"
+                    else:
+                        result_badge = "✅ <b>WIN</b>"
                 else:
+                    is_jackpot = False
                     self.losses += 1
                     self.current_loss_streak += 1
                     pnl = -stake
@@ -315,6 +324,7 @@ class AutoBetEngine:
                     "result_size": win_size,
                     "result_num": win_num,
                     "is_win": is_win,
+                    "is_jackpot": is_jackpot,
                     "stake": stake,
                     "pnl": pnl,
                     "balance": self.current_balance
@@ -322,9 +332,10 @@ class AutoBetEngine:
                 self.history_records.append(record)
 
                 # Update the last settled description for the pinned dashboard
+                jack_note = f" [🎯 Exact Hit: {win_num}]" if is_jackpot else ""
                 self.last_settled_desc = (
                     f"{result_badge} <b>Round <code>{issue_number[-4:]}</code>:</b> "
-                    f"Bet <b>{bet_choice}</b> (₹{stake:.0f}) ➔ Drawn <b>{win_size} ({win_num})</b> | "
+                    f"Bet <b>{bet_choice}</b> (₹{stake:.0f}) ➔ Drawn <b>{win_size} ({win_num})</b>{jack_note} | "
                     f"PnL: <b>{'+' if pnl>=0 else ''}₹{pnl:.2f}</b> (Bal: <b>₹{self.current_balance:.2f}</b>)"
                 )
                 break
