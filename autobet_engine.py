@@ -214,13 +214,14 @@ class AutoBetEngine:
                         self.is_running = False
                         break
 
-                    # 🧠 4. Run Deep AI Thinking & Quant Analysis
-                    analysis = self.brain.analyze(history, current_loss_streak=self.current_loss_streak)
+                    # 🧠 4. Run Deep AI Thinking & Quant Analysis (Synchronized with 30S Predictor Stream)
+                    analysis = self.brain.analyze(history, current_loss_streak=self.current_loss_streak, target_issue=cur_issue)
                     decision = analysis.get("decision", "SKIP")
                     confidence = analysis.get("confidence", 50.0)
                     strategy = analysis.get("strategy", "")
                     reason = analysis.get("reason", "")
                     is_qualified = analysis.get("is_qualified", False)
+                    expected_nums = analysis.get("expected_nums")
 
                     # 5. Action Execution (SINGLE MESSAGE UPDATE ONLY)
                     if is_qualified and decision in ("BIG", "SMALL"):
@@ -238,7 +239,8 @@ class AutoBetEngine:
                                 "method": "DEMO SIMULATION"
                             }
                             self.total_bets_placed += 1
-                            self.last_action_desc = f"🎯 <b>Prediction:</b> <b>{decision}</b> (₹{stake:.2f}) | <i>{strategy}</i> [{confidence:.0f}%]"
+                            exp_badge = f" [🎯 Potential: {expected_nums}]" if expected_nums else ""
+                            self.last_action_desc = f"🎯 <b>Prediction:</b> <b>{decision}</b>{exp_badge} (₹{stake:.2f}) | <i>{strategy}</i> [{confidence:.0f}%]"
                             self._update_status(cur_issue)
                         else:
                             bet_res = self.api.place_bet(cur_issue, decision, amount=stake, type_id=game_type_id)
@@ -253,7 +255,8 @@ class AutoBetEngine:
                                     "method": bet_res.get("method", "API")
                                 }
                                 self.total_bets_placed += 1
-                                self.last_action_desc = f"🎯 <b>Live Bet:</b> <b>{decision}</b> (₹{stake:.2f}) | <i>{strategy}</i> [{confidence:.0f}%]"
+                                exp_badge = f" [🎯 Potential: {expected_nums}]" if expected_nums else ""
+                                self.last_action_desc = f"🎯 <b>Live Bet:</b> <b>{decision}</b>{exp_badge} (₹{stake:.2f}) | <i>{strategy}</i> [{confidence:.0f}%]"
                                 self._update_status(cur_issue)
                             else:
                                 self.last_action_desc = f"⚠️ <b>Bet Error:</b> {bet_res.get('msg')}"
@@ -276,8 +279,9 @@ class AutoBetEngine:
             return
 
         for it in history[-5:]:
-            if str(it.get("issueNumber")) == str(issue_number):
-                win_num = int(it.get("number", -1))
+            hist_iss = str(it.get("issueNumber") or it.get("period", ""))
+            if hist_iss == str(issue_number):
+                win_num = int(it.get("number", it.get("num", -1)))
                 win_size = "BIG" if win_num >= 5 else "SMALL"
                 bet_choice = self.active_bet["choice"]
                 stake = self.active_bet["stake"]

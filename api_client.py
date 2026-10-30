@@ -166,11 +166,13 @@ class WinGoAPIClient:
                 data = j.get("data", {})
                 new_items = data.get("list", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
                 
-                # Merge new items into cached history by issueNumber
-                seen_issues = {str(it.get("issueNumber")) for it in cached if it.get("issueNumber")}
+                # Merge new items into cached history by issueNumber or period
+                seen_issues = {str(it.get("issueNumber") or it.get("period")) for it in cached if (it.get("issueNumber") or it.get("period"))}
                 for item in reversed(new_items):
-                    iss = str(item.get("issueNumber"))
+                    iss = str(item.get("issueNumber") or item.get("period", ""))
                     if iss and iss not in seen_issues:
+                        item["issueNumber"] = iss
+                        item["period"] = iss
                         cached.append(item)
                         seen_issues.add(iss)
 
