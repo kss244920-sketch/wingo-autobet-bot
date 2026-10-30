@@ -184,9 +184,32 @@ def on_target_achieved_callback(data: Dict[str, Any]):
 
 @bot.message_handler(commands=["start", "status"])
 def cmd_start(msg):
-    global OWNER_CHAT_ID
+    global OWNER_CHAT_ID, PINNED_STATUS_MSG_ID
     OWNER_CHAT_ID = msg.chat.id
-    ensure_pinned_status(msg.chat.id)
+
+    initial_data = {
+        "balance": engine.current_balance,
+        "start_balance": engine.start_balance,
+        "target": engine.target_amount,
+        "wins": engine.wins,
+        "losses": engine.losses,
+        "skips": engine.skips,
+        "issue": engine.last_handled_issue or "Initializing...",
+        "last_action": engine.last_action_desc,
+        "last_settled": engine.last_settled_desc,
+        "is_running": engine.is_running,
+        "is_demo": engine.is_demo
+    }
+    text = format_status_text(initial_data)
+    try:
+        sent = bot.reply_to(msg, text, reply_markup=get_dashboard_markup())
+        PINNED_STATUS_MSG_ID = sent.message_id
+        try:
+            bot.pin_chat_message(msg.chat.id, PINNED_STATUS_MSG_ID, disable_notification=True)
+        except Exception:
+            pass
+    except Exception as e:
+        print(f"[!] cmd_start error: {e}")
 
 
 @bot.message_handler(commands=["setamount", "settarget", "target"])
