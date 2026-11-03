@@ -19,3 +19,5 @@ services:
         value: 8751111148:AAH9k6fOYw5LW9pIzN3-8jCddcR96s0_-bU
       - key: GROQ_API_KEY
         sync: false
+      - key: GITHUB_TOKEN
+        sync: false
