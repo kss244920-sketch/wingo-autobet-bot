@@ -48,32 +48,35 @@ class AutoBetEngine:
         self.stop_loss_amount = float(stop_loss_amount)
         self.config["stop_loss_amount"] = self.stop_loss_amount
 
-    def calculate_stake(self, confidence: float = 80.0, strategy: str = "") -> int:
+    def calculate_stake(self, confidence: float = 60.0, strategy: str = "") -> int:
         bal = self.current_balance if self.current_balance > 0 else 100.0
 
-        # Smart Micro-Compounding (8% - 15% bankroll to compound to ₹500 target):
+        # Smart Micro-Compounding (5% - 10% bankroll calibrated to real Laplace probabilities):
         strat_upper = strategy.upper()
-        if confidence >= 90.0 or "CONCURRENCE" in strat_upper or "VIP" in strat_upper or "ROADMAP" in strat_upper:
-            pct = 0.12  # 12% stake on high conviction signals
-        elif confidence >= 85.0:
-            pct = 0.10  # 10% stake
+        if confidence >= 66.0 or "CONCURRENCE" in strat_upper or "VIP" in strat_upper or "ROADMAP" in strat_upper or "DRAGON" in strat_upper:
+            pct = 0.10  # 10% stake on high conviction signals
+        elif confidence >= 60.0:
+            pct = 0.08  # 8% standard stake
         else:
-            pct = 0.08  # 8% base stake
+            pct = 0.05  # 5% base stake
 
         base_calc = max(int(self.config.get("min_stake", 5)), int(round(bal * pct)))
 
-        # Gentle Recovery & Capital Protection:
+        # 🏰 3-Bullet Capital Protection (Never Martingale past Level 3):
         if self.current_loss_streak == 1:
-            # Gentle 1.3X recovery after 1 loss
-            stake = max(base_calc, int(round(base_calc * 1.3)))
-        elif self.current_loss_streak >= 2:
-            # Capital Defense: Shrink stake to defensive 5% base to weather drawdowns safely
+            # Bullet 2: 2.5X recovery
+            stake = max(base_calc, int(round(base_calc * 2.5)))
+        elif self.current_loss_streak == 2:
+            # Bullet 3: 6X recovery (Final Fortress Bullet)
+            stake = max(base_calc, int(round(base_calc * 6.0)))
+        elif self.current_loss_streak >= 3:
+            # Hard stop on streak escalation: Reset to base to prevent account blowup
             stake = max(int(self.config.get("min_stake", 5)), int(round(bal * 0.05)))
         else:
             stake = base_calc
 
-        # Safety cap: Never risk more than 22% of bankroll in any single round
-        max_allowed = max(5, int(round(bal * 0.22)))
+        # Safety cap: Never risk more than 25% of bankroll in any single round
+        max_allowed = max(5, int(round(bal * 0.25)))
         stake = min(stake, max_allowed)
 
         # Target Clamping: If close to target (e.g. at ₹480 towards ₹500), only bet what is needed!
@@ -82,7 +85,7 @@ class AutoBetEngine:
             if needed < stake:
                 stake = max(int(self.config.get("min_stake", 5)), needed)
 
-        return max(2, stake)
+        return max(int(self.config.get("min_stake", 5)), stake)
 
     def start(self, on_notification: Optional[Callable[[str], None]] = None,
               on_target_achieved: Optional[Callable[[Dict[str, Any]], None]] = None,
@@ -227,21 +230,45 @@ class AutoBetEngine:
                         self.is_running = False
                         break
 
-                    # 🧠 4. Run Deep AI Thinking & Quant Analysis (Synchronized with 1M Predictor Stream)
+                    # 🛑 3b. MAX LOSS STREAK SHIELD (3-Bullet Circuit Breaker):
+                    max_loss_streak = int(self.config.get("max_loss_streak_halt", 3))
+                    if self.current_loss_streak >= max_loss_streak:
+                        streak_msg = (
+                            f"🛑 <b>3-BULLET LOSS SHIELD TRIGGERED ({self.current_loss_streak} Losses)</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🛡️ 3-Bullet Fortress Limit reached. Auto-betting paused to protect bankroll."
+                        )
+                        self.last_action_desc = f"🛑 3-BULLET LIMIT HIT ({self.current_loss_streak}L)"
+                        self._update_status(cur_issue)
+                        self._notify(streak_msg)
+                        self.is_running = False
+                        break
+
+                    # ⏱️ 4. TIMING & LATENCY BUFFER (Reject bets if < 15s remain in the 1-minute cycle)
+                    curr_sec = int(time.time()) % 60
+                    exec_buffer = int(self.config.get("execution_buffer_sec", 45))
+                    if curr_sec > exec_buffer:
+                        self.skips += 1
+                        self.last_action_desc = f"⏱️ <b>Timing Guard:</b> {60 - curr_sec}s remaining (Safe Buffer)"
+                        self._update_status(cur_issue)
+                        time.sleep(2.0)
+                        continue
+
+                    # 🧠 5. Run Deep AI Thinking & Quant Analysis (Synchronized with 1M Predictor Stream)
                     analysis = self.brain.analyze(history, current_loss_streak=self.current_loss_streak, target_issue=cur_issue)
                     decision = analysis.get("decision", "SKIP")
                     confidence = analysis.get("confidence", 50.0)
                     strategy = analysis.get("strategy", "")
                     reason = analysis.get("reason", "")
                     is_qualified = analysis.get("is_qualified", False)
-                    expected_nums = analysis.get("expected_nums")
 
-                    # 5. Action Execution (SINGLE MESSAGE UPDATE ONLY)
-                    if is_qualified and decision in ("BIG", "SMALL"):
+                    min_conf = float(self.config.get("min_confidence_to_bet", 58.0))
+
+                    # 6. Action Execution (SINGLE MESSAGE UPDATE ONLY)
+                    if is_qualified and decision in ("BIG", "SMALL") and confidence >= min_conf:
                         stake = self.calculate_stake(confidence=confidence, strategy=strategy)
                         total_bal = (self.current_balance if not self.is_demo else self.current_balance)
                         stake_pct = int(round((stake / total_bal) * 100)) if total_bal > 0 else 10
-                        exp_badge = f" [🎰 Number: <b>{expected_nums}</b>]" if expected_nums is not None else ""
                         
                         if self.is_demo:
                             self.current_balance = round(self.current_balance - stake, 2)
@@ -251,14 +278,13 @@ class AutoBetEngine:
                                 "stake": stake,
                                 "confidence": confidence,
                                 "strategy": strategy,
-                                "expected_num": expected_nums,
                                 "time": time.time(),
                                 "method": "DEMO SIMULATION"
                             }
                             self.total_bets_placed += 1
                             self.last_action_desc = (
-                                f"🎯 <b>Target Bet:</b> <b>{decision}</b> (<b>₹{stake:.2f}</b> · {stake_pct}% Bankroll){exp_badge}\n"
-                                f"🔮 <b>Strategy:</b> <i>{strategy}</i> [{confidence:.0f}% Conf]"
+                                f"🎯 <b>Target Bet:</b> <b>{decision}</b> (<b>₹{stake:.2f}</b> · {stake_pct}% Bankroll)\n"
+                                f"🔮 <b>Strategy:</b> <i>{strategy}</i> [<b>{confidence:.1f}%</b> Est. Prob]"
                             )
                             self._update_status(cur_issue)
                         else:
@@ -270,14 +296,13 @@ class AutoBetEngine:
                                     "stake": stake,
                                     "confidence": confidence,
                                     "strategy": strategy,
-                                    "expected_num": expected_nums,
                                     "time": time.time(),
                                     "method": bet_res.get("method", "API")
                                 }
                                 self.total_bets_placed += 1
                                 self.last_action_desc = (
-                                    f"🎯 <b>Live Bet:</b> <b>{decision}</b> (<b>₹{stake:.2f}</b> · {stake_pct}% Bankroll){exp_badge}\n"
-                                    f"🔮 <b>Strategy:</b> <i>{strategy}</i> [{confidence:.0f}% Conf]"
+                                    f"🎯 <b>Live Bet:</b> <b>{decision}</b> (<b>₹{stake:.2f}</b> · {stake_pct}% Bankroll)\n"
+                                    f"🔮 <b>Strategy:</b> <i>{strategy}</i> [<b>{confidence:.1f}%</b> Est. Prob]"
                                 )
                                 self._update_status(cur_issue)
                             else:
@@ -285,7 +310,8 @@ class AutoBetEngine:
                                 self._update_status(cur_issue)
                     else:
                         self.skips += 1
-                        self.last_action_desc = f"⏭️ <b>Auto Skip:</b> <i>{reason}</i> (Capital Shield Active)"
+                        skip_label = reason if reason else "Confluence Filter"
+                        self.last_action_desc = f"⏭️ <b>Auto Skip:</b> <i>{skip_label}</i> (Capital Shield Active)"
                         self._update_status(cur_issue)
 
                 time.sleep(2.0)
@@ -315,17 +341,8 @@ class AutoBetEngine:
                     pnl = round(stake * 0.96, 2)
                     if self.is_demo:
                         self.current_balance = round(self.current_balance + (stake * 1.96), 2)
-                    
-                    import re
-                    exp_nums = self.active_bet.get("expected_num") or self.active_bet.get("expected_nums")
-                    exp_list = re.findall(r"\b\d\b", str(exp_nums or ""))
-                    is_jackpot = (str(win_num) in exp_list)
-                    if is_jackpot:
-                        result_badge = "🎯 <b>WIN (JACKPOT 9X)!</b>"
-                    else:
-                        result_badge = "✅ <b>WIN</b>"
+                    result_badge = "✅ <b>WIN</b>"
                 else:
-                    is_jackpot = False
                     self.losses += 1
                     self.current_loss_streak += 1
                     pnl = -stake

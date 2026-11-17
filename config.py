@@ -23,13 +23,14 @@ DEFAULT_CONFIG = {
     "stop_loss_amount": 25.0,
     
     # Quality & Risk Settings
-    "min_confidence_to_bet": 80.0,
+    "min_confidence_to_bet": 58.0,
     "min_quant_margin_pct": 14.0,
     "prefer_skips": True,           # Strictly prefer automatic skips
-    "base_stake_pct": 0.10,         # 10% dynamic stake for swift target compounding
+    "base_stake_pct": 0.08,         # 8% disciplined base stake for safe compounding
     "min_stake": 5,
     "max_stake_cap": 85,
     "max_loss_streak_halt": 3,
+    "execution_buffer_sec": 45,     # Lock out bets with less than 15s remaining in round
 }
 
 def load_config():
