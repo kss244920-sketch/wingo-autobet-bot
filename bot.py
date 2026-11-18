@@ -178,7 +178,14 @@ def parse_channel_signal(raw_text: str) -> Optional[Dict[str, Any]]:
     if pm:
         period = pm.group(1)
 
-    if "SKIP" in clean.upper():
+    val = None
+    vm = re.search(r"(?:Target|Bet on|Prediction)\s*➔\s*[^A-Z]*(BIG|SMALL)", clean, re.I)
+    if not vm:
+        vm = re.search(r"(?:Target|Bet on|Prediction)\s*[:\- ]+[^A-Z]*(BIG|SMALL)", clean, re.I)
+    if vm:
+        val = vm.group(1).upper()
+
+    if not val and "SKIP" in clean.upper():
         return {
             "period": period,
             "decision": "SKIP",
@@ -187,20 +194,20 @@ def parse_channel_signal(raw_text: str) -> Optional[Dict[str, Any]]:
             "time": time.time()
         }
 
-    val = None
-    vm = re.search(r"Bet on\s*➔\s*[^A-Z]*(BIG|SMALL)", clean, re.I)
-    if vm:
-        val = vm.group(1).upper()
-
     num = None
-    nm = re.search(r"Number Chance\s*➔\s*(\d+)", clean, re.I)
+    nm = re.search(r"(?:Number Chance|Number Shots)\s*➔?\s*[:\s]*(\d+)", clean, re.I)
     if nm:
         num = int(nm.group(1))
 
     strat = "1M Predictor VIP Signal"
-    sm = re.search(r"Strategy:\s*([^\n\r]+)", clean, re.I)
+    sm = re.search(r"(?:Pattern|Strategy):\s*([^\n\r]+)", clean, re.I)
     if sm:
         strat = sm.group(1).strip()
+
+    conf = 85.0
+    cm = re.search(r"Est\.?\s*Win\s*Probability\s*:\s*~?(\d+(?:\.\d+)?)%", clean, re.I)
+    if cm:
+        conf = float(cm.group(1))
 
     if val:
         return {
@@ -208,7 +215,7 @@ def parse_channel_signal(raw_text: str) -> Optional[Dict[str, Any]]:
             "decision": val,
             "expected_num": num,
             "strategy": strat,
-            "confidence": 92.0,
+            "confidence": conf,
             "time": time.time()
         }
     return None

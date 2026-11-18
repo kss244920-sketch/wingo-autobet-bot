@@ -174,15 +174,19 @@ class AutoBetEngine:
                 # Check if this is a new round
                 if cur_issue != self.last_handled_issue:
                     # 1. Check resolution of previously active bet
-                    if self.active_bet and self.last_handled_issue:
-                        self._resolve_previous_bet(self.active_bet["issue"], history)
+                    if self.active_bet:
+                        settled = self._resolve_previous_bet(self.active_bet["issue"], history)
+                        if not settled:
+                            # Previous round draw is still propagating on CDN! Wait and retry
+                            time.sleep(1.0)
+                            continue
+                        self.active_bet = None
                         self.last_action_desc = "🧠 <i>AI analyzing market trends for next round...</i>"
                         self._update_status(cur_issue)
                         # Brief pause so the user sees the win/loss settlement on the pinned dashboard
-                        time.sleep(2.0)
+                        time.sleep(1.5)
 
                     self.last_handled_issue = cur_issue
-                    self.active_bet = None
 
                     # 🎯 2. TARGET CHECK: Has target balance been achieved?
                     if self.target_amount > 0 and self.current_balance >= self.target_amount:
@@ -315,11 +319,11 @@ class AutoBetEngine:
 
         print("[+] WinGo Auto-Bet Loop Ended.", flush=True)
 
-    def _resolve_previous_bet(self, issue_number: str, history: list):
+    def _resolve_previous_bet(self, issue_number: str, history: list) -> bool:
         if not self.active_bet or self.active_bet.get("issue") != issue_number:
-            return
+            return True
 
-        for it in history[-5:]:
+        for it in history[-15:]:
             hist_iss = str(it.get("issueNumber") or it.get("period", ""))
             if hist_iss == str(issue_number):
                 win_num = int(it.get("number", it.get("num", -1)))
@@ -365,4 +369,11 @@ class AutoBetEngine:
                     f"Bet <b>{bet_choice}</b> (₹{stake:.0f}) ➔ Drawn <b>{win_size} ({win_num})</b>{jack_note} | "
                     f"PnL: <b>{'+' if pnl>=0 else ''}₹{pnl:.2f}</b> (Bal: <b>₹{self.current_balance:.2f}</b>)"
                 )
-                break
+                return True
+
+        # Timeout safeguard: If round never appeared after 180s, release to prevent dead stall
+        if time.time() - float(self.active_bet.get("time", time.time())) > 180.0:
+            print(f"⚠️ [BET TIMEOUT] Round {issue_number} did not appear in draw history after 180s. Releasing stall.", flush=True)
+            return True
+
+        return False

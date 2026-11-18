@@ -189,7 +189,12 @@ class WinGoAPIClient:
                                 cached.append(item)
                                 seen_issues.add(iss)
 
-                        # Keep rolling 300 rounds
+                        # Keep rolling 300 rounds and maintain strict chronological order
+                        try:
+                            cached.sort(key=lambda x: int(x.get("issueNumber") or x.get("period") or 0) if str(x.get("issueNumber") or x.get("period", "")).isdigit() else 0)
+                        except Exception:
+                            pass
+
                         if len(cached) > 300:
                             cached = cached[-300:]
 
@@ -198,6 +203,11 @@ class WinGoAPIClient:
                         break
             except Exception as e:
                 continue
+
+        try:
+            cached.sort(key=lambda x: int(x.get("issueNumber") or x.get("period") or 0) if str(x.get("issueNumber") or x.get("period", "")).isdigit() else 0)
+        except Exception:
+            pass
 
         return cached
 
