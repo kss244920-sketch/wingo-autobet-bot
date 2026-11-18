@@ -14,7 +14,7 @@ DEFAULT_CONFIG = {
     # Mode: WinGo 1 Minute Production Engine
     "game_type_id": 1,              # WinGo 1M
     "game_code": "WinGo_1M",
-    "history_api_url": "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json",
+    "history_api_url": "https://draw.ar-lottery02.com/WinGo/WinGo_1M/GetHistoryIssuePage.json",
     
     # Demo Simulation Settings
     "demo_mode": True,
@@ -30,7 +30,7 @@ DEFAULT_CONFIG = {
     "min_stake": 5,
     "max_stake_cap": 85,
     "max_loss_streak_halt": 3,
-    "execution_buffer_sec": 45,     # Lock out bets with less than 15s remaining in round
+    "execution_buffer_sec": 52,     # Lock out bets with less than 8s remaining in round
 }
 
 def load_config():

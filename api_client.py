@@ -161,31 +161,43 @@ class WinGoAPIClient:
             except Exception:
                 pass
 
-        try:
-            r = requests.get(history_url, timeout=8)
-            if r.status_code == 200:
-                j = r.json()
-                data = j.get("data", {})
-                new_items = data.get("list", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-                
-                # Merge new items into cached history by issueNumber or period
-                seen_issues = {str(it.get("issueNumber") or it.get("period")) for it in cached if (it.get("issueNumber") or it.get("period"))}
-                for item in reversed(new_items):
-                    iss = str(item.get("issueNumber") or item.get("period", ""))
-                    if iss and iss not in seen_issues:
-                        item["issueNumber"] = iss
-                        item["period"] = iss
-                        cached.append(item)
-                        seen_issues.add(iss)
+        mirrors = [
+            history_url,
+            "https://draw.ar-lottery02.com/WinGo/WinGo_1M/GetHistoryIssuePage.json",
+            "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json",
+            "https://draw.ar-lottery03.com/WinGo/WinGo_1M/GetHistoryIssuePage.json",
+            "https://draw.ar-lottery04.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
+        ]
+        seen_cand = set()
+        cands = [m for m in mirrors if not (m in seen_cand or seen_cand.add(m))]
 
-                # Keep rolling 300 rounds
-                if len(cached) > 300:
-                    cached = cached[-300:]
+        for cand_url in cands:
+            try:
+                r = requests.get(cand_url, timeout=5)
+                if r.status_code == 200:
+                    j = r.json()
+                    data = j.get("data", {})
+                    new_items = data.get("list", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                    if new_items:
+                        # Merge new items into cached history by issueNumber or period
+                        seen_issues = {str(it.get("issueNumber") or it.get("period")) for it in cached if (it.get("issueNumber") or it.get("period"))}
+                        for item in reversed(new_items):
+                            iss = str(item.get("issueNumber") or item.get("period", ""))
+                            if iss and iss not in seen_issues:
+                                item["issueNumber"] = iss
+                                item["period"] = iss
+                                cached.append(item)
+                                seen_issues.add(iss)
 
-                with open(cache_path, "w") as f:
-                    json.dump(cached, f, indent=2)
-        except Exception as e:
-            print(f"[API ERROR] get_history: {e}")
+                        # Keep rolling 300 rounds
+                        if len(cached) > 300:
+                            cached = cached[-300:]
+
+                        with open(cache_path, "w") as f:
+                            json.dump(cached, f, indent=2)
+                        break
+            except Exception as e:
+                continue
 
         return cached
 

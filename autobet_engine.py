@@ -63,17 +63,10 @@ class AutoBetEngine:
         base_calc = max(int(self.config.get("min_stake", 5)), int(round(bal * pct)))
 
         # 🏰 3-Bullet Capital Protection (Never Martingale past Level 3):
-        if self.current_loss_streak == 1:
-            # Bullet 2: 2.5X recovery
-            stake = max(base_calc, int(round(base_calc * 2.5)))
-        elif self.current_loss_streak == 2:
-            # Bullet 3: 6X recovery (Final Fortress Bullet)
-            stake = max(base_calc, int(round(base_calc * 6.0)))
-        elif self.current_loss_streak >= 3:
-            # Hard stop on streak escalation: Reset to base to prevent account blowup
-            stake = max(int(self.config.get("min_stake", 5)), int(round(bal * 0.05)))
-        else:
-            stake = base_calc
+        # Align with Predictor: [1, 3, 8] multiplier ladder
+        mult_map = [1, 3, 8]
+        mult = mult_map[min(self.current_loss_streak, len(mult_map) - 1)]
+        stake = max(base_calc, int(round(base_calc * mult)))
 
         # Safety cap: Never risk more than 25% of bankroll in any single round
         max_allowed = max(5, int(round(bal * 0.25)))
@@ -244,9 +237,9 @@ class AutoBetEngine:
                         self.is_running = False
                         break
 
-                    # ⏱️ 4. TIMING & LATENCY BUFFER (Reject bets if < 15s remain in the 1-minute cycle)
+                    # ⏱️ 4. TIMING & LATENCY BUFFER (Reject bets if < 8s remain in the 1-minute cycle)
                     curr_sec = int(time.time()) % 60
-                    exec_buffer = int(self.config.get("execution_buffer_sec", 45))
+                    exec_buffer = int(self.config.get("execution_buffer_sec", 52))
                     if curr_sec > exec_buffer:
                         self.skips += 1
                         self.last_action_desc = f"⏱️ <b>Timing Guard:</b> {60 - curr_sec}s remaining (Safe Buffer)"
@@ -335,6 +328,7 @@ class AutoBetEngine:
                 stake = self.active_bet["stake"]
 
                 is_win = (win_size == bet_choice)
+                is_jackpot = False # Fix F9
                 if is_win:
                     self.wins += 1
                     self.current_loss_streak = 0
